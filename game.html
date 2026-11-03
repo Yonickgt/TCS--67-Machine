@@ -38,7 +38,11 @@
   #nameForm input { background:var(--bg); color:var(--fg); border:1px solid #3a4356; border-radius:10px; padding:12px; font-size:1.1rem; }
   #nameForm input:focus-visible { outline:2px solid var(--accent); }
   #board { width:min(100%,720px); background:var(--card); border-radius:16px; padding:16px 24px; }
-  #board h2 { margin:0 0 8px; font-size:1.2rem; }
+  #board .head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+  #board h2 { margin:0; font-size:1.2rem; }
+  #reset { background:none; color:var(--dim); border:1px solid #3a4356; border-radius:8px; padding:6px 12px; font:inherit; font-size:.9rem; cursor:pointer; }
+  #reset:hover { color:var(--fg); border-color:var(--fg); }
+  #reset.confirm { color:#ff9a9a; border-color:#ff9a9a; }
   #rows { margin:0; padding:0; list-style:none; counter-reset:r; }
   #rows li { counter-increment:r; display:flex; gap:12px; padding:8px 0; border-top:1px solid #232938; }
   #rows li::before { content:counter(r); width:1.6em; color:var(--dim); }
@@ -65,7 +69,10 @@
 <button id="start">Start</button>
 <div id="result">Score <b id="score">0</b> reps · <span id="rps"></span> reps/s<br><span id="pb"></span></div>
 
-<section id="board"><h2>Leaderboard</h2><ol id="rows"></ol></section>
+<section id="board">
+  <div class="head"><h2>Leaderboard</h2><button id="reset" type="button" hidden>Reset</button></div>
+  <ol id="rows"></ol>
+</section>
 
 <div id="modal" hidden>
   <form id="nameForm">
@@ -195,6 +202,7 @@ const setBoard = b => store("67board", JSON.stringify(b));
 function renderBoard(highlightT) {
   const rows = $("rows"); rows.replaceChildren();
   const b = getBoard().slice(0, 10);
+  $("reset").hidden = !b.length;       // nothing to reset when empty
   if (!b.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No scores yet. Be the first."; rows.append(li); return; }
   b.forEach(e => {
     const li = document.createElement("li"); if (e.t === highlightT) li.className = "me";
@@ -204,6 +212,14 @@ function renderBoard(highlightT) {
   });
 }
 renderBoard();
+// Reset needs two clicks (no blocking confirm dialog). Clears only the leaderboard, not your personal best.
+let resetTimer;
+const cancelReset = () => { clearTimeout(resetTimer); $("reset").classList.remove("confirm"); $("reset").textContent = "Reset"; };
+$("reset").onclick = () => {
+  if ($("reset").classList.contains("confirm")) { cancelReset(); setBoard([]); renderBoard(); return; }
+  $("reset").classList.add("confirm"); $("reset").textContent = "Click again to delete all";
+  resetTimer = setTimeout(cancelReset, 3000);
+};
 $("start").onclick = () => {
   if (parent !== window) parent.postMessage({ type: "67:start" }, location.origin);  // landing page zooms into play mode
   $("name").value = store("67name") || ""; $("modal").hidden = false; $("name").focus(); };
