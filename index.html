@@ -3,226 +3,356 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>67 Speed</title>
-<script>if (location.search.includes("embed")) document.documentElement.classList.add("embed");</script>
+<meta name="description" content="A webcam arm-speed game. Pump your arms for 20 seconds and see how many reps you can land.">
+<script>document.documentElement.classList.add("js");</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
 <style>
-  /* embed mode (?embed): used by landing.html, hides page chrome and fits the iframe height */
-  .embed body { padding:8px; justify-content:center; }
-  .embed h1, .embed body > p { display:none; }
-  .embed #stage { width:min(100%, calc((100dvh - 90px) * 4 / 3)); }
-  .embed #board { display:none; }
-  .embed #result { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:5; box-shadow:0 20px 60px #000a; }
-  :root { --bg:#0b0d12; --fg:#f2f4f8; --dim:#8b93a7; --accent:#7cf5a8; --card:#151922; }
+  /* Outfit, self-hostable via fontsource. Swap for local files in production. */
+  @font-face { font-family:"Outfit"; font-weight:400; font-display:swap;
+    src:url("https://cdn.jsdelivr.net/npm/@fontsource/outfit@5.0.8/files/outfit-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family:"Outfit"; font-weight:700; font-display:swap;
+    src:url("https://cdn.jsdelivr.net/npm/@fontsource/outfit@5.0.8/files/outfit-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family:"Outfit"; font-weight:800; font-display:swap;
+    src:url("https://cdn.jsdelivr.net/npm/@fontsource/outfit@5.0.8/files/outfit-latin-800-normal.woff2") format("woff2"); }
+
+  /* One palette, two modes. Cool neutrals, one mint accent (same as the game). */
+  :root {
+    --bg:#0d0f12; --surface:#151920; --line:#252b36;
+    --text:#eef1f5; --dim:#9aa3b2;
+    --accent:#7cf5a8; --on-accent:#06210f;
+    --grad-a:#7cf5a8; --grad-b:#2fbf74; --on-grad:#06210f;
+    --shadow:0 24px 60px rgb(0 0 0 / .45);
+    /* Shape rule: cards and frames 20px, buttons and pills fully round. Nothing else. */
+    --r-card:20px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f3f5f8; --surface:#ffffff; --line:#d9dee6;
+      --text:#10151c; --dim:#4f5a6a;
+      --accent:#0b7a43; --on-accent:#ffffff;
+      --grad-a:#0b6b3a; --grad-b:#0d7c43; --on-grad:#ffffff;
+      --shadow:0 24px 60px rgb(16 21 28 / .14);
+    }
+  }
+
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px system-ui,sans-serif;
-         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
-  h1 { margin:8px 0 0; font-size:2rem; letter-spacing:.02em; }
-  p  { margin:0; color:var(--dim); text-align:center; max-width:36rem; }
-  #stage { position:relative; width:min(100%,720px); aspect-ratio:4/3; background:#000;
-           border-radius:16px; overflow:hidden; border:1px solid #232938; }
-  video, canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
-  #hud { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between;
-         padding:14px; pointer-events:none; text-shadow:0 2px 8px #000; }
-  #top { display:flex; justify-content:space-between; font-weight:700; font-size:1.4rem; }
-  #big { align-self:center; font-size:7rem; font-weight:800; color:var(--accent); line-height:1; }
-  #msg { align-self:center; background:#000a; padding:6px 12px; border-radius:8px; color:var(--dim); min-height:2em; }
-  button { background:var(--accent); color:#06210f; border:0; border-radius:12px; padding:14px 28px;
-           font-size:1.1rem; font-weight:700; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:wait; }
-  #result { background:var(--card); border-radius:16px; padding:16px 24px; text-align:center; display:none; }
-  #result b { color:var(--accent); font-size:2.4rem; }
-  #modal { position:fixed; inset:0; background:#000a; display:flex; align-items:center; justify-content:center; z-index:20; padding:16px; }
-  #modal[hidden] { display:none; }
-  #nameForm { background:var(--card); border:1px solid #2a3140; border-radius:16px; padding:24px; display:grid; gap:10px; width:min(100%,360px); }
-  #nameForm label { font-weight:700; }
-  #nameForm input { background:var(--bg); color:var(--fg); border:1px solid #3a4356; border-radius:10px; padding:12px; font-size:1.1rem; }
-  #nameForm input:focus-visible { outline:2px solid var(--accent); }
-  #board { width:min(100%,720px); background:var(--card); border-radius:16px; padding:16px 24px; }
-  #board h2 { margin:0 0 8px; font-size:1.2rem; }
-  #rows { margin:0; padding:0; list-style:none; counter-reset:r; }
-  #rows li { counter-increment:r; display:flex; gap:12px; padding:8px 0; border-top:1px solid #232938; }
-  #rows li::before { content:counter(r); width:1.6em; color:var(--dim); }
-  #rows li .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  #rows li .s { font-weight:700; color:var(--accent); }
-  #rows li.me { background:#7cf5a822; margin:0 -12px; padding:8px 12px; border-radius:8px; }
-  #rows .empty { color:var(--dim); display:block; } #rows .empty::before { content:none; }
+  html { scroll-behavior:smooth; scroll-padding-top:80px; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:400 1.0625rem/1.55 "Outfit", system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:inherit; }
+  h1, h2, h3, p { margin:0; }
+  h1, h2 { font-weight:800; letter-spacing:-.03em; line-height:1.02; text-wrap:balance; }
+  p { color:var(--dim); max-width:65ch; }
+  .wrap { width:100%; max-width:1200px; margin:0 auto; padding:0 16px; }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+
+  /* Buttons */
+  .btn { display:inline-flex; align-items:center; gap:.5rem; white-space:nowrap; text-decoration:none;
+         border-radius:999px; padding:.9rem 1.6rem; font-weight:700; font-size:1.0625rem;
+         background:var(--accent); color:var(--on-accent); border:2px solid var(--accent);
+         transition:transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s; }
+  .btn:hover { transform:translateY(-2px); box-shadow:0 10px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .btn:active { transform:translateY(0) scale(.98); }
+  .btn.ghost { background:transparent; color:var(--text); border-color:var(--line); }
+  .btn.ghost:hover { box-shadow:none; border-color:var(--text); }
+  .btn.sm { padding:.55rem 1.1rem; font-size:.95rem; }
+
+  /* Nav: one line, 64px */
+  nav { position:sticky; top:0; z-index:10; height:64px; background:color-mix(in srgb, var(--bg) 82%, transparent);
+        backdrop-filter:blur(14px); border-bottom:1px solid var(--line); }
+  nav .wrap { height:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .brand { font-weight:800; font-size:1.35rem; letter-spacing:-.02em; text-decoration:none; }
+  .brand b { color:var(--accent); }
+  .links { display:flex; align-items:center; gap:28px; }
+  .links a:not(.btn) { text-decoration:none; color:var(--dim); font-weight:700; }
+  .links a:not(.btn):hover { color:var(--text); }
+
+  /* Hero: asymmetric split, copy left, live game right */
+  .hero { padding:32px 0 56px; }
+  .hero .wrap { display:grid; grid-template-columns:5fr 6fr; gap:48px; align-items:center; }
+  .hero h1 { font-size:clamp(2.75rem, 5.4vw, 4.75rem); }
+  .hero h1 b { color:var(--accent); }
+  .hero p { margin-top:20px; font-size:1.2rem; max-width:30ch; }
+  .cta-row { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+  .game { border-radius:var(--r-card); overflow:hidden; background:#0b0d12; border:1px solid var(--line);
+          box-shadow:var(--shadow); aspect-ratio:8 / 7; max-height:calc(100dvh - 9rem); }
+  .game iframe { width:100%; height:100%; border:0; display:block; }
+
+  /* Sections */
+  section { padding:96px 0; }
+  h2 { font-size:clamp(2rem, 4.4vw, 3.5rem); }
+  .head p { margin-top:14px; }
+
+  /* How it works: bento, 3 items = 3 cells, each with its own surface */
+  .bento { margin-top:44px; display:grid; gap:16px; grid-template-columns:5fr 7fr; }
+  .cell { border-radius:var(--r-card); padding:28px; position:relative; overflow:hidden; border:1px solid var(--line); background:var(--surface); }
+  .cell h3 { font-size:1.6rem; font-weight:800; letter-spacing:-.02em; line-height:1.1; margin-top:14px; }
+  .cell p { margin-top:10px; color:inherit; opacity:.85; max-width:42ch; }
+  .cell i { font-size:2rem; }
+  .c-cam { min-height:280px; background:
+      radial-gradient(color-mix(in srgb, var(--text) 16%, transparent) 1.2px, transparent 1.4px) 0 0 / 18px 18px,
+      var(--surface); }
+  .c-pump { min-height:280px; background:linear-gradient(135deg, var(--grad-a), var(--grad-b)); color:var(--on-grad); border-color:transparent; }
+  .c-pump .num { position:absolute; right:22px; bottom:-26px; font-weight:800; font-size:clamp(9rem, 17vw, 14rem);
+                 line-height:1; letter-spacing:-.06em; opacity:.22; }
+  .c-best { grid-column:1 / -1; display:grid; grid-template-columns:auto 1fr; gap:24px; align-items:center;
+            background:linear-gradient(100deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface) 70%); }
+  .c-best h3 { margin-top:0; }
+  .c-best i { font-size:3rem; color:var(--accent); }
+
+  /* Leaderboard: real local entries only, no seed data */
+  .lb { margin-top:32px; max-width:820px; padding:0; list-style:none; counter-reset:rank; }
+  .lb li { counter-increment:rank; display:flex; align-items:center; gap:20px; padding:16px 20px; border-radius:var(--r-card); }
+  .lb li:nth-child(odd) { background:var(--surface); }
+  .lb li::before { content:counter(rank); flex:none; width:2ch; font-weight:800; font-size:1.6rem; color:var(--dim); }
+  .lb li:nth-child(-n+3)::before { color:var(--accent); }
+  .lb .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; font-size:1.25rem; }
+  .lb .s { font-weight:800; font-size:1.6rem; color:var(--accent); }
+  .lb .empty { display:block; background:var(--surface); color:var(--dim); }
+  .lb .empty::before { content:none; }
+
+  /* Statement */
+  .statement h2 { font-size:clamp(2.5rem, 7vw, 6rem); max-width:14ch; }
+  .statement h2 b { color:var(--accent); }
+  .statement p { margin-top:28px; font-size:1.2rem; }
+
+  /* Tips: horizontal scroll-snap row */
+  .snap { margin-top:36px; display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:12px;
+          scrollbar-color:var(--line) transparent; }
+  .tip { flex:0 0 min(300px, 78vw); scroll-snap-align:start; border:1px solid var(--line); background:var(--surface);
+         border-radius:var(--r-card); padding:24px; }
+  .tip i { font-size:1.9rem; color:var(--accent); }
+  .tip p { margin-top:14px; color:var(--text); font-weight:700; font-size:1.15rem; line-height:1.3; }
+
+  /* FAQ */
+  .faq { max-width:820px; margin-top:32px; }
+  details { border-bottom:1px solid var(--line); }
+  summary { list-style:none; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:16px;
+            padding:22px 0; font-weight:700; font-size:1.2rem; }
+  summary::-webkit-details-marker { display:none; }
+  summary i { color:var(--accent); transition:transform .3s cubic-bezier(.16,1,.3,1); flex:none; }
+  details[open] summary i { transform:rotate(45deg); }
+  details p { padding:0 0 22px; }
+
+  /* Final CTA */
+  .final .wrap > div { border-radius:var(--r-card); padding:clamp(32px, 6vw, 72px);
+        background:linear-gradient(135deg, var(--grad-a), var(--grad-b)); color:var(--on-grad); }
+  .final h2 { font-size:clamp(2.5rem, 7vw, 5.5rem); }
+  .final .btn { margin-top:28px; background:var(--on-grad); color:var(--grad-b); border-color:var(--on-grad); }
+  footer { padding:40px 0 56px; }
+  footer p { font-size:.95rem; }
+
+  /* Motion: hero entrance, scroll reveal, gated for reduced motion */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero h1, .hero p, .hero .cta-row, .game { animation:rise .8s cubic-bezier(.16,1,.3,1) both; }
+    .hero p { animation-delay:.08s; } .hero .cta-row { animation-delay:.16s; } .game { animation-delay:.24s; }
+    @keyframes rise { from { opacity:0; transform:translateY(24px); } }
+    .js .reveal { opacity:0; transform:translateY(28px);
+                  transition:opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); transition-delay:var(--d,0s); }
+    .js .reveal.in { opacity:1; transform:none; }
+  }
+
+  /* Play mode: the hero game zooms to a full view with the leaderboard beside it.
+     z-index scale: nav 10, play overlay 30, play bar 40. */
+  button.btn { font-family:inherit; cursor:pointer; }
+  .game { view-transition-name:game; }
+  ::view-transition-group(game) { animation-duration:.55s; animation-timing-function:cubic-bezier(.16,1,.3,1); }
+  #playbar, #playpanel { display:none; }
+  body.play { overflow:hidden; }
+  body.play #playbar { display:flex; position:fixed; top:0; left:0; right:0; height:64px; z-index:40;
+    align-items:center; justify-content:space-between; padding:0 16px; background:var(--bg); border-bottom:1px solid var(--line); }
+  body.play .game { position:fixed; z-index:30; top:64px; left:0; bottom:0; right:min(380px, 32vw);
+    height:auto; max-height:none; aspect-ratio:auto; border-radius:0; border:0; box-shadow:none; }
+  body.play #playpanel { display:block; position:fixed; z-index:30; top:64px; right:0; bottom:0; width:min(380px, 32vw);
+    padding:24px 20px; background:var(--bg); border-left:1px solid var(--line); overflow:auto; }
+  #playpanel h2 { font-size:1.6rem; }
+  #playpanel .lb { margin-top:16px; max-width:none; }
+  #playpanel .lb li { padding:12px 14px; gap:14px; }
+  #playpanel .lb .n { font-size:1.05rem; }
+  #playpanel .lb li::before, #playpanel .lb .s { font-size:1.25rem; }
+
+  /* Mobile collapse */
+  @media (max-width: 860px) {
+    body.play .game { right:0; bottom:42dvh; }
+    body.play #playpanel { top:auto; left:0; width:100%; height:42dvh; border-left:0; border-top:1px solid var(--line); }
+    .links a:not(.btn) { display:none; }
+    .hero .wrap { grid-template-columns:1fr; gap:32px; }
+    .game { aspect-ratio:auto; max-height:none; height:calc((100vw - 32px) * .75 + 100px); }
+    .bento { grid-template-columns:1fr; }
+    .c-best { grid-template-columns:1fr; gap:12px; }
+    section { padding:64px 0; }
+  }
 </style>
 </head>
 <body>
-<h1>67 Speed</h1>
-<p>Stand back so your shoulders and hips are in frame. Pump your arms up and down for 20 seconds. Each wrist direction change counts as one rep. Video never leaves your browser.</p>
 
-<div id="stage">
-  <video id="v" playsinline muted></video>
-  <canvas id="c"></canvas>
-  <div id="hud">
-    <div id="top"><span id="time">20.0s</span><span id="best"></span></div>
-    <div id="big"></div>
-    <div id="msg">Press Start</div>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top">67 <b>Speed</b></a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#leaderboard">Leaderboard</a>
+      <a href="#tips">Tips</a>
+      <a href="#faq">FAQ</a>
+      <a class="btn sm" href="game.html">Play now</a>
+    </div>
   </div>
+</nav>
+
+<div id="playbar">
+  <a class="brand" href="#top">67 <b>Speed</b></a>
+  <button class="btn ghost sm" id="back" type="button"><i class="ph ph-arrow-left"></i> Back</button>
 </div>
+<aside id="playpanel">
+  <h2>Leaderboard</h2>
+  <ol class="lb" id="pb"></ol>
+</aside>
 
-<button id="start">Start</button>
-<div id="result">Score <b id="score">0</b> reps · <span id="rps"></span> reps/s<br><span id="pb"></span></div>
+<main id="top">
+  <header class="hero">
+    <div class="wrap">
+      <div>
+        <h1>How fast is your <b>67</b>?</h1>
+        <p>Pump your arms at your webcam for 20 seconds. We count every rep right in your browser.</p>
+        <div class="cta-row">
+          <a class="btn" href="game.html">Play now <i class="ph ph-arrow-right"></i></a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+      </div>
+      <div class="game">
+        <iframe src="game.html?embed" title="67 Speed live game" allow="camera"></iframe>
+      </div>
+    </div>
+  </header>
 
-<section id="board"><h2>Leaderboard</h2><ol id="rows"></ol></section>
+  <section id="leaderboard">
+    <div class="wrap">
+      <h2 class="reveal">Leaderboard</h2>
+      <ol class="lb reveal" id="lb" style="--d:.1s"></ol>
+    </div>
+  </section>
 
-<div id="modal" hidden>
-  <form id="nameForm">
-    <label for="name">What is your name?</label>
-    <input id="name" maxlength="16" required autocomplete="off">
-    <button>Start round</button>
-  </form>
-</div>
+  <section id="how">
+    <div class="wrap">
+      <div class="head reveal"><h2>Three moves. Twenty seconds.</h2></div>
+      <div class="bento">
+        <article class="cell c-cam reveal">
+          <i class="ph ph-camera"></i>
+          <h3>Allow the camera</h3>
+          <p>Find good light and step back until your shoulders show. Seated works too.</p>
+        </article>
+        <article class="cell c-pump reveal" style="--d:.08s">
+          <i class="ph ph-timer"></i>
+          <h3>Pump for 20 seconds</h3>
+          <p>Move your arms up and down as fast as you can. Each wrist direction change is one rep.</p>
+          <span class="num" aria-hidden="true">20</span>
+        </article>
+        <article class="cell c-best reveal" style="--d:.16s">
+          <i class="ph ph-trophy"></i>
+          <div>
+            <h3>Beat your best</h3>
+            <p>Your score and reps per second appear at the end. Your best is saved on this device.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
 
-<script type="module">
-import { PoseLandmarker, FilesetResolver, DrawingUtils }
-  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+  <section class="statement">
+    <div class="wrap">
+      <h2 class="reveal">Your video never leaves <b>this tab.</b></h2>
+      <p class="reveal" style="--d:.1s">Pose tracking runs on your device with Google MediaPipe. Nothing is uploaded and there is no signup.</p>
+    </div>
+  </section>
 
-const ROUND_MS = 20000;
-const THRESH = 0.15;   // ponytail: tune live; fraction of shoulder-hip distance a wrist must travel before a reversal counts
-const MIN_VIS = 0.5;
-const SMOOTH = 3;      // frames in moving average
+  <section id="tips">
+    <div class="wrap">
+      <h2 class="reveal">Tips for a higher score</h2>
+      <div class="snap reveal" style="--d:.1s" tabindex="0" aria-label="Tips, scroll sideways">
+        <div class="tip"><i class="ph ph-sun"></i><p>Face a window or lamp so your arms are well lit.</p></div>
+        <div class="tip"><i class="ph ph-arrows-out"></i><p>Step back until your shoulders show. Hips are optional.</p></div>
+        <div class="tip"><i class="ph ph-hand-waving"></i><p>Keep both wrists in frame for the whole round.</p></div>
+        <div class="tip"><i class="ph ph-t-shirt"></i><p>Wear sleeves that contrast with the wall behind you.</p></div>
+        <div class="tip"><i class="ph ph-armchair"></i><p>Seated is fine. Keep your elbows clear of the desk.</p></div>
+      </div>
+    </div>
+  </section>
 
-// ---- COUNTER START (unit-tested in node, keep self-contained) ----
-function makeCounter() {
-  return { ext: null, dir: 0, count: 0, buf: [] };
-}
-function feed(s, y, thr) {            // y: wrist y in px, thr: min travel in px
-  s.buf.push(y); if (s.buf.length > SMOOTH) s.buf.shift();
-  const v = s.buf.reduce((a, b) => a + b, 0) / s.buf.length;
-  if (s.ext === null) { s.ext = v; return s.count; }
-  if (s.dir >= 0) {                   // moving down (or unknown): track the lowest point
-    if (v > s.ext) s.ext = v;
-    else if (s.ext - v > thr) { s.dir = -1; s.ext = v; s.count++; }
+  <section id="faq">
+    <div class="wrap">
+      <h2 class="reveal">Questions</h2>
+      <div class="faq reveal" style="--d:.1s">
+        <details><summary>How are reps counted? <i class="ph ph-plus"></i></summary>
+          <p>Each time a wrist reverses direction after travelling a set distance, it counts as one rep. The distance scales with your body size, so it does not depend on how far you stand.</p></details>
+        <details><summary>Is my video uploaded? <i class="ph ph-plus"></i></summary>
+          <p>No. Tracking runs in your browser. Only the pose model files are downloaded.</p></details>
+        <details><summary>Why is my count lower than expected? <i class="ph ph-plus"></i></summary>
+          <p>Most webcams capture about 30 frames per second, so very fast pumping can be undercounted. Good light and both wrists in frame help.</p></details>
+        <details><summary>Does it work on a phone? <i class="ph ph-plus"></i></summary>
+          <p>It should wherever your browser allows camera access. A laptop webcam is the safest choice for frame rate.</p></details>
+        <details><summary>Is there a leaderboard? <i class="ph ph-plus"></i></summary>
+          <p>Not yet. Your best score is saved on this device.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="reveal">
+        <h2>20 seconds. Go.</h2>
+        <a class="btn" href="game.html">Play now <i class="ph ph-arrow-right"></i></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap"><p>67 Speed is an independent webcam game. Pose tracking by Google MediaPipe.</p></div>
+</footer>
+
+<script>
+  // Scroll reveal via IntersectionObserver (no scroll listeners).
+  const io = new IntersectionObserver((es) => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }), { threshold: .15 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+
+  // Leaderboard: reads the same localStorage the embedded game writes (same origin). Only real entries, top 10.
+  function renderBoard() {
+    let b = []; try { b = JSON.parse(localStorage.getItem("67board")) || []; } catch {}
+    ["lb", "pb"].forEach(id => {           // page section + play-mode side panel
+      const ol = document.getElementById(id); ol.replaceChildren();
+      if (!b.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No scores yet. Play a round and you will show up here."; ol.append(li); return; }
+      b.slice(0, 10).forEach(e => {
+        const li = document.createElement("li");
+        const n = document.createElement("span"); n.className = "n"; n.textContent = e.name;   // textContent: names are untrusted
+        const s = document.createElement("span"); s.className = "s"; s.textContent = e.score;
+        li.append(n, s); ol.append(li);
+      });
+    });
   }
-  if (s.dir <= 0) {                   // moving up (or unknown): track the highest point
-    if (v < s.ext) s.ext = v;
-    else if (v - s.ext > thr) { s.dir = 1; s.ext = v; s.count++; }
+  renderBoard();
+
+  // Play mode: the embedded game posts "67:start" when Start is pressed. Zoom the frame to a full view, Back returns.
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function setPlay(on) {
+    if (document.body.classList.contains("play") === on) return;   // already there, avoid a pointless transition
+    const apply = () => document.body.classList.toggle("play", on);
+    if (document.startViewTransition && !reduceMotion) document.startViewTransition(apply); else apply();   // zoom morph where supported
   }
-  return s.count;
-}
-// ---- COUNTER END ----
+  addEventListener("message", e => { if (e.origin === location.origin && e.data && e.data.type === "67:start") setPlay(true); });
+  document.getElementById("back").onclick = () => setPlay(false);
+  // Every "Play now" zooms into play mode and opens the name prompt. The href stays as a fallback (no JS, middle-click).
+  document.querySelectorAll('a[href="game.html"]').forEach(a => a.addEventListener("click", e => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault(); setPlay(true);
+    document.querySelector(".game iframe").contentWindow.postMessage({ type: "67:open" }, location.origin);
+  }));
+  addEventListener("keydown", e => { if (e.key === "Escape") setPlay(false); });
 
-const $ = id => document.getElementById(id);
-const video = $("v"), canvas = $("c"), ctx = canvas.getContext("2d");
-const draw = new DrawingUtils(ctx);
-let landmarker, state = "idle", roundStart = 0, counters, lastVideoTime = -1;
-
-const getBest = () => { try { return +localStorage.getItem("67best") || 0; } catch { return 0; } };
-const setBest = n => { try { localStorage.setItem("67best", n); } catch {} };
-const say = t => $("msg").textContent = t;
-const showBest = () => $("best").textContent = getBest() ? "Best " + getBest() : "";
-showBest();
-
-async function init() {
-  say("Loading model…");
-  const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-  landmarker = await PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-      delegate: "GPU",
-    },
-    runningMode: "VIDEO", numPoses: 1,
-  });
-  say("Starting camera…");
-  video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, frameRate: 60 } });
-  await video.play();
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  requestAnimationFrame(loop);
-}
-
-function loop(now) {
-  requestAnimationFrame(loop);
-  if (state === "playing") {            // timer runs even when no body is detected
-    const t = performance.now() - roundStart;
-    $("time").textContent = Math.max(0, (ROUND_MS - t) / 1000).toFixed(1) + "s";
-    if (t >= ROUND_MS) return finish(counters[0].count + counters[1].count);
-  }
-  if (video.currentTime === lastVideoTime) return;
-  lastVideoTime = video.currentTime;
-  const res = landmarker.detectForVideo(video, now);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const lm = res.landmarks[0];
-  if (!lm) { if (state !== "idle") say("No body found, step back"); return; }
-  draw.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: "#7cf5a8", lineWidth: 3 });
-  draw.drawLandmarks(lm, { color: "#fff", radius: 3 });
-
-  const H = canvas.height, W = canvas.width;
-  const vis = i => lm[i].visibility > MIN_VIS;
-  const d = (a, b) => Math.hypot((a.x - b.x) * W, (a.y - b.y) * H);
-  // distance-independent scale: shoulder-hip distance, or 1.5x shoulder width when hips are out of frame (seated at a desk)
-  let scale;
-  if ([11, 12, 23, 24].every(vis)) scale = (d(lm[11], lm[23]) + d(lm[12], lm[24])) / 2;
-  else if (vis(11) && vis(12)) scale = 1.5 * d(lm[11], lm[12]);
-  else { if (state !== "idle") say("Step back: show your shoulders"); return; }
-
-  if (state === "playing") {
-    [15, 16].forEach((i, k) => { if (lm[i].visibility > MIN_VIS) feed(counters[k], lm[i].y * H, THRESH * scale); });
-    $("big").textContent = counters[0].count + counters[1].count;
-    say("GO!");
-  }
-}
-
-async function run() {
-  $("start").disabled = true; $("result").style.display = "none";
-  try { if (!landmarker) await init(); }
-  catch (e) { say("Error: " + e.message); $("start").disabled = false; console.error(e); return; }
-  state = "countdown";
-  for (let n = 3; n > 0; n--) { $("big").textContent = n; say("Get ready, arms up!"); await new Promise(r => setTimeout(r, 1000)); }
-  counters = [makeCounter(), makeCounter()];
-  roundStart = performance.now(); state = "playing"; $("big").textContent = 0; say("GO!");
-}
-
-function finish(total) {
-  state = "idle"; $("start").disabled = false; $("start").textContent = "Play again";
-  const prev = getBest();
-  if (total > prev) setBest(total);
-  const entry = { name: playerName, score: total, t: Date.now() };
-  setBoard([...getBoard(), entry].sort((a, b) => b.score - a.score || a.t - b.t).slice(0, 50));
-  renderBoard(entry.t);
-  $("score").textContent = total;
-  $("rps").textContent = (total / (ROUND_MS / 1000)).toFixed(1);
-  $("pb").textContent = total > prev ? "New personal best!" : "Best: " + prev;
-  $("result").style.display = "block"; say("Done"); showBest();
-}
-// ---- name prompt + leaderboard ----
-// ponytail: leaderboard lives in localStorage, so it is per browser. Swap getBoard/setBoard for fetch calls to a backend to share it.
-let playerName = "";
-const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
-const getBoard = () => { try { return JSON.parse(store("67board")) || []; } catch { return []; } };
-const setBoard = b => store("67board", JSON.stringify(b));
-function renderBoard(highlightT) {
-  const rows = $("rows"); rows.replaceChildren();
-  const b = getBoard().slice(0, 10);
-  if (!b.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No scores yet. Be the first."; rows.append(li); return; }
-  b.forEach(e => {
-    const li = document.createElement("li"); if (e.t === highlightT) li.className = "me";
-    const n = document.createElement("span"); n.className = "n"; n.textContent = e.name;   // textContent: names are untrusted input
-    const s = document.createElement("span"); s.className = "s"; s.textContent = e.score;
-    li.append(n, s); rows.append(li);
-  });
-}
-renderBoard();
-$("start").onclick = () => {
-  if (parent !== window) parent.postMessage({ type: "67:start" }, location.origin);  // landing page zooms into play mode
-  $("name").value = store("67name") || ""; $("modal").hidden = false; $("name").focus(); };
-$("nameForm").onsubmit = e => {
-  e.preventDefault();
-  playerName = $("name").value.trim().slice(0, 16);
-  if (!playerName) return;
-  store("67name", playerName); $("modal").hidden = true; run();
-};
-document.addEventListener("keydown", e => { if (e.key === "Escape") $("modal").hidden = true; });
-// landing page "Play now" buttons ask the embedded game to open the name prompt (same as pressing Start)
-addEventListener("message", e => { if (e.origin === location.origin && e.data && e.data.type === "67:open") $("start").click(); });
-
-// self-check: synthetic 5 Hz wrist sine for 2 s at 30 fps should give ~2 reversals per cycle
-(() => {
-  const s = makeCounter();
-  for (let f = 0; f < 60; f++) feed(s, 200 + 100 * Math.sin(2 * Math.PI * 5 * f / 30), 20);
-  console.assert(s.count >= 15 && s.count <= 21, "counter self-check failed", s.count);
-})();
+  addEventListener("storage", e => { if (e.key === "67board") renderBoard(); });  // updates live when the iframe saves a score
 </script>
 </body>
 </html>

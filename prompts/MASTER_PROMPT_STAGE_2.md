@@ -1,14 +1,14 @@
 STAGE 2: LANDING PAGE
 
-Prerequisite: Stage 1 is done. `index.html` (the 67 Speed webcam game) already exists in this folder and works. Do not rewrite the game logic. If the `design-taste-frontend` skill is available, invoke it first and follow its rules and pre-flight check. Then add a marketing landing page that embeds the real game.
+Prerequisite: Stage 1 is done. `game.html` (the 67 Speed webcam game) already exists in this folder and works. Do not rewrite the game logic. If the `design-taste-frontend` skill is available, invoke it first and follow its rules and pre-flight check. Then add a marketing landing page that embeds the real game.
 
 Start with this one-line design read: "Reading this as: consumer game landing for a fast-scrolling meme-and-challenge audience, with a bold playful language, leaning toward native CSS plus one mint accent that matches the game." Dials: DESIGN_VARIANCE 8, MOTION_INTENSITY 6, VISUAL_DENSITY 3.
 
 ## Files
-1. Edit `index.html`: add an embed mode (see below). Touch nothing else in it.
-2. Create `landing.html`: one self-contained file, vanilla HTML and CSS, one small inline script. Served at `http://localhost:8067/landing.html` (`python -m http.server 8067`). All "Play now" buttons link to `index.html`.
+1. Edit `game.html`: add an embed mode (see below). Touch nothing else in it.
+2. Create `index.html`: one self-contained file, vanilla HTML and CSS, one small inline script. Served at `http://localhost:8067/` (`python -m http.server 8067`). All "Play now" buttons link to `game.html`.
 
-## Embed mode for index.html
+## Embed mode for game.html
 - In `<head>`, before the style block: `<script>if (location.search.includes("embed")) document.documentElement.classList.add("embed");</script>`
 - CSS: `.embed body { padding:8px; justify-content:center; }`, `.embed h1, .embed body > p { display:none; }`, `.embed #stage { width:min(100%, calc((100dvh - 90px) * 4 / 3)); }`, `.embed #result { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:5; box-shadow:0 20px 60px #000a; }`
 
@@ -27,7 +27,7 @@ Start with this one-line design read: "Reading this as: consumer game landing fo
 
 ## Page structure (exact copy, use hyphens only, zero em-dashes or en-dashes anywhere)
 1. **Nav**: sticky, 64px, one line, blurred bg, bottom hairline. Left wordmark "67 Speed" (the word Speed in accent). Right: links "How it works" (#how), "Tips" (#tips), "FAQ" (#faq), and a small "Play now" button. On screens under 860px hide the three links and keep the button.
-2. **Hero**: grid 5fr / 6fr, gap 48px, items centered, top padding about 32px. Left: h1 "How fast is your 67?" with "67" in accent, size `clamp(2.75rem, 5.4vw, 4.75rem)`, max 2 lines. Subtext (max 30ch wide): "Pump your arms at your webcam for 20 seconds. We count every rep right in your browser." Two buttons: "Play now" with a `ph-arrow-right` icon, and a ghost "How it works" linking to #how. Nothing else in the hero (no eyebrow, no tagline, no logos, no scroll cue). Right: a rounded frame with `aspect-ratio: 8 / 7`, `max-height: calc(100dvh - 9rem)`, dark bg `#0b0d12` in both modes, soft shadow, containing `<iframe src="index.html?embed" title="67 Speed live game" allow="camera">` filling it. Under 860px stack the columns and give the frame `height: calc((100vw - 32px) * .75 + 100px)`.
+2. **Hero**: grid 5fr / 6fr, gap 48px, items centered, top padding about 32px. Left: h1 "How fast is your 67?" with "67" in accent, size `clamp(2.75rem, 5.4vw, 4.75rem)`, max 2 lines. Subtext (max 30ch wide): "Pump your arms at your webcam for 20 seconds. We count every rep right in your browser." Two buttons: "Play now" with a `ph-arrow-right` icon, and a ghost "How it works" linking to #how. Nothing else in the hero (no eyebrow, no tagline, no logos, no scroll cue). Right: a rounded frame with `aspect-ratio: 8 / 7`, `max-height: calc(100dvh - 9rem)`, dark bg `#0b0d12` in both modes, soft shadow, containing `<iframe src="game.html?embed" title="67 Speed live game" allow="camera">` filling it. Under 860px stack the columns and give the frame `height: calc((100vw - 32px) * .75 + 100px)`.
 3. **How it works** (id `how`): h2 "Three moves. Twenty seconds." Then a 3-cell bento, exactly three cells, grid `5fr 7fr` with the third cell spanning full width, 16px gaps, each cell padded 28px and with its own surface:
    - "Allow the camera" (`ph-camera`): "Find good light and step back until your shoulders show. Seated works too." Background: dot pattern made with `radial-gradient` on the surface color.
    - "Pump for 20 seconds" (`ph-timer`): "Move your arms up and down as fast as you can. Each wrist direction change is one rep." Background: the accent gradient, with a huge decorative "20" at 22% opacity in the bottom-right corner (`aria-hidden`).
@@ -65,7 +65,7 @@ Start with this one-line design read: "Reading this as: consumer game landing fo
 - z-index only on the nav (10) and the embedded result overlay (5).
 
 ## Verify before you finish
-1. Serve the folder and open `http://localhost:8067/landing.html`. Take screenshots at about 1512 px wide of the hero, the bento, the tips row, the FAQ and the final block, in dark mode. Also check light mode and a 390 px phone width.
+1. Serve the folder and open `http://localhost:8067/`. Take screenshots at about 1512 px wide of the hero, the bento, the tips row, the FAQ and the final block, in dark mode. Also check light mode and a 390 px phone width.
 2. Confirm the game inside the hero loads, shows "Press Start", and that Start asks for camera permission (the camera must be allowed for `localhost`).
 3. Search the file for `—` and `–`. The count must be 0.
 4. Report anything you could not check, instead of claiming it works.

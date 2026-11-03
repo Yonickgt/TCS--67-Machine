@@ -1,6 +1,6 @@
 STAGE 3: NAME PROMPT AND LEADERBOARD
 
-Prerequisite: Stages 1 and 2 are done. `index.html` (the game, with `?embed` mode) and `landing.html` (the landing page that embeds it) both exist and work. This stage adds a name prompt before every round and a leaderboard, in both files. Do not change the rep-counting logic. Stage 1 listed the leaderboard as out of scope; this stage overrides that.
+Prerequisite: Stages 1 and 2 are done. `game.html` (the game, with `?embed` mode) and `index.html` (the landing page that embeds it) both exist and work. This stage adds a name prompt before every round and a leaderboard, in both files. Do not change the rep-counting logic. Stage 1 listed the leaderboard as out of scope; this stage overrides that.
 
 ## Hard requirement: no mock data
 The leaderboard shows ONLY real rounds played in this browser. No seed rows, no placeholder names, no fake scores, no backend. When nothing has been played, show an empty state. All data lives in `localStorage`.
@@ -11,7 +11,7 @@ The leaderboard shows ONLY real rounds played in this browser. No seed rows, no 
 - Wrap every `localStorage` and `JSON.parse` access in try/catch and fall back to an empty array or null. The page must work with storage blocked.
 - `67best` (personal best) from Stage 1 stays as is.
 
-## index.html changes
+## game.html changes
 1. **Name prompt on every Start.** Pressing Start no longer calls `run()` directly. It opens a modal:
    - Markup (add after the leaderboard section): `<div id="modal" hidden><form id="nameForm"><label for="name">What is your name?</label><input id="name" maxlength="16" required autocomplete="off"><button>Start round</button></form></div>`
    - Label above the input, no placeholder-as-label. The input is pre-filled with `67name` and focused when the modal opens.
@@ -27,7 +27,7 @@ The leaderboard shows ONLY real rounds played in this browser. No seed rows, no 
 4. **Embed mode:** add `.embed #board { display:none; }` so the hero iframe stays compact. The name modal still works inside the iframe.
 5. Mark the storage helpers with a comment: `// ponytail: leaderboard lives in localStorage, so it is per browser. Swap getBoard/setBoard for fetch calls to a backend to share it.`
 
-## landing.html changes
+## index.html changes
 1. **Nav:** add a "Leaderboard" link (`#leaderboard`) between "How it works" and "Tips". The nav must still fit on one line at desktop.
 2. **New section** directly under the hero and before "How it works": `<section id="leaderboard"><div class="wrap"><h2 class="reveal">Leaderboard</h2><ol class="lb reveal" id="lb" style="--d:.1s"></ol></div></section>`
 3. **Styling:** the list is max 820px wide, no bullets, rank numbers from a CSS counter (large, weight 800, dim; the top 3 ranks in the accent color). Rows are 20px-radius with padding `16px 20px`, with the odd rows tinted to the `--surface` color (no hairline borders, because ten bordered rows is the banned long-list pattern). Name is bold 1.25rem with ellipsis, score is weight 800, 1.6rem, accent. Empty state row: "No scores yet. Play a round and you will show up here."
@@ -37,9 +37,9 @@ The leaderboard shows ONLY real rounds played in this browser. No seed rows, no 
 Zero em-dashes or en-dashes in visible text. One accent color, same radii rules, hero still fits the first viewport, motion stays gated behind `prefers-reduced-motion: no-preference`, no `scroll` listeners, no decorative dots, all contrast passes AA in dark and light mode.
 
 ## Verify before you finish
-1. Serve the folder (`python -m http.server 8067`) and open `http://localhost:8067/index.html` with empty storage. The leaderboard shows only the empty state. Press Start: the name modal appears with a focused input. Escape closes it. Submitting an empty name does nothing.
+1. Serve the folder (`python -m http.server 8067`) and open `http://localhost:8067/game.html` with empty storage. The leaderboard shows only the empty state. Press Start: the name modal appears with a focused input. Escape closes it. Submitting an empty name does nothing.
 2. Play (or, if no camera is available, call the save path from the console) so at least two entries with different scores exist. Confirm the order, the `me` highlight, and that a name like `<b>x</b>` is displayed as literal text.
-3. Open `http://localhost:8067/landing.html`: the Leaderboard section shows the same entries, and playing a round in the hero iframe updates it without a reload.
+3. Open `http://localhost:8067/`: the Leaderboard section shows the same entries, and playing a round in the hero iframe updates it without a reload.
 4. Reload with storage cleared and confirm both pages show the empty state and nothing throws.
 5. Search both files for `—` and `–` in visible text. Count must be 0.
 6. Report anything you could not check instead of claiming it works.

@@ -1,7 +1,7 @@
-Build a single-file website, `index.html`, that replicates "67 Speed" (67speedgames.com): a webcam arm-pumping game that counts reps with computer vision. No build step, no backend, no model training.
+Build a single-file website, `game.html`, that replicates "67 Speed" (67speedgames.com): a webcam arm-pumping game that counts reps with computer vision. No build step, no backend, no model training.
 
 ## Stack
-- One `index.html`, vanilla JS in `<script type="module">`, inline CSS. No frameworks.
+- One `game.html`, vanilla JS in `<script type="module">`, inline CSS. No frameworks.
 - Detection: Google MediaPipe Pose Landmarker via the pretrained model, running fully in the browser (video never leaves the device).
   - Import: `import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"`
   - WASM fileset: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm`
@@ -40,4 +40,4 @@ Dark theme (CSS variables: bg `#0b0d12`, text `#f2f4f8`, dim `#8b93a7`, accent `
 ## Out of scope (do not build)
 Leaderboard, 1v1, friends battles, accounts, audio, other mini-games.
 
-Deliver the complete file, then say how to run it: `python -m http.server 8067` and open `http://localhost:8067`.
+Deliver the complete file, then say how to run it: `python -m http.server 8067` and open `http://localhost:8067/game.html`.

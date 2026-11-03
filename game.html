@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>67 Speed</title>
+<script>if (location.search.includes("embed")) document.documentElement.classList.add("embed");</script>
+<style>
+  /* embed mode (?embed): used by index.html, hides page chrome and fits the iframe height */
+  .embed body { padding:8px; justify-content:center; }
+  .embed h1, .embed body > p { display:none; }
+  .embed #stage { width:min(100%, calc((100dvh - 90px) * 4 / 3)); }
+  .embed #board { display:none; }
+  .embed #result { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:5; box-shadow:0 20px 60px #000a; }
+  :root { --bg:#0b0d12; --fg:#f2f4f8; --dim:#8b93a7; --accent:#7cf5a8; --card:#151922; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px system-ui,sans-serif;
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
+  h1 { margin:8px 0 0; font-size:2rem; letter-spacing:.02em; }
+  p  { margin:0; color:var(--dim); text-align:center; max-width:36rem; }
+  #stage { position:relative; width:min(100%,720px); aspect-ratio:4/3; background:#000;
+           border-radius:16px; overflow:hidden; border:1px solid #232938; }
+  video, canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  #hud { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between;
+         padding:14px; pointer-events:none; text-shadow:0 2px 8px #000; }
+  #top { display:flex; justify-content:space-between; font-weight:700; font-size:1.4rem; }
+  #big { align-self:center; font-size:7rem; font-weight:800; color:var(--accent); line-height:1; }
+  #msg { align-self:center; background:#000a; padding:6px 12px; border-radius:8px; color:var(--dim); min-height:2em; }
+  button { background:var(--accent); color:#06210f; border:0; border-radius:12px; padding:14px 28px;
+           font-size:1.1rem; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #result { background:var(--card); border-radius:16px; padding:16px 24px; text-align:center; display:none; }
+  #result b { color:var(--accent); font-size:2.4rem; }
+  #modal { position:fixed; inset:0; background:#000a; display:flex; align-items:center; justify-content:center; z-index:20; padding:16px; }
+  #modal[hidden] { display:none; }
+  #nameForm { background:var(--card); border:1px solid #2a3140; border-radius:16px; padding:24px; display:grid; gap:10px; width:min(100%,360px); }
+  #nameForm label { font-weight:700; }
+  #nameForm input { background:var(--bg); color:var(--fg); border:1px solid #3a4356; border-radius:10px; padding:12px; font-size:1.1rem; }
+  #nameForm input:focus-visible { outline:2px solid var(--accent); }
+  #board { width:min(100%,720px); background:var(--card); border-radius:16px; padding:16px 24px; }
+  #board h2 { margin:0 0 8px; font-size:1.2rem; }
+  #rows { margin:0; padding:0; list-style:none; counter-reset:r; }
+  #rows li { counter-increment:r; display:flex; gap:12px; padding:8px 0; border-top:1px solid #232938; }
+  #rows li::before { content:counter(r); width:1.6em; color:var(--dim); }
+  #rows li .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #rows li .s { font-weight:700; color:var(--accent); }
+  #rows li.me { background:#7cf5a822; margin:0 -12px; padding:8px 12px; border-radius:8px; }
+  #rows .empty { color:var(--dim); display:block; } #rows .empty::before { content:none; }
+</style>
+</head>
+<body>
+<h1>67 Speed</h1>
+<p>Stand back so your shoulders and hips are in frame. Pump your arms up and down for 20 seconds. Each wrist direction change counts as one rep. Video never leaves your browser.</p>
+
+<div id="stage">
+  <video id="v" playsinline muted></video>
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <div id="top"><span id="time">20.0s</span><span id="best"></span></div>
+    <div id="big"></div>
+    <div id="msg">Press Start</div>
+  </div>
+</div>
+
+<button id="start">Start</button>
+<div id="result">Score <b id="score">0</b> reps · <span id="rps"></span> reps/s<br><span id="pb"></span></div>
+
+<section id="board"><h2>Leaderboard</h2><ol id="rows"></ol></section>
+
+<div id="modal" hidden>
+  <form id="nameForm">
+    <label for="name">What is your name?</label>
+    <input id="name" maxlength="16" required autocomplete="off">
+    <button>Start round</button>
+  </form>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver, DrawingUtils }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const ROUND_MS = 20000;
+const THRESH = 0.15;   // ponytail: tune live; fraction of shoulder-hip distance a wrist must travel before a reversal counts
+const MIN_VIS = 0.5;
+const SMOOTH = 3;      // frames in moving average
+
+// ---- COUNTER START (unit-tested in node, keep self-contained) ----
+function makeCounter() {
+  return { ext: null, dir: 0, count: 0, buf: [] };
+}
+function feed(s, y, thr) {            // y: wrist y in px, thr: min travel in px
+  s.buf.push(y); if (s.buf.length > SMOOTH) s.buf.shift();
+  const v = s.buf.reduce((a, b) => a + b, 0) / s.buf.length;
+  if (s.ext === null) { s.ext = v; return s.count; }
+  if (s.dir >= 0) {                   // moving down (or unknown): track the lowest point
+    if (v > s.ext) s.ext = v;
+    else if (s.ext - v > thr) { s.dir = -1; s.ext = v; s.count++; }
+  }
+  if (s.dir <= 0) {                   // moving up (or unknown): track the highest point
+    if (v < s.ext) s.ext = v;
+    else if (v - s.ext > thr) { s.dir = 1; s.ext = v; s.count++; }
+  }
+  return s.count;
+}
+// ---- COUNTER END ----
+
+const $ = id => document.getElementById(id);
+const video = $("v"), canvas = $("c"), ctx = canvas.getContext("2d");
+const draw = new DrawingUtils(ctx);
+let landmarker, state = "idle", roundStart = 0, counters, lastVideoTime = -1;
+
+const getBest = () => { try { return +localStorage.getItem("67best") || 0; } catch { return 0; } };
+const setBest = n => { try { localStorage.setItem("67best", n); } catch {} };
+const say = t => $("msg").textContent = t;
+const showBest = () => $("best").textContent = getBest() ? "Best " + getBest() : "";
+showBest();
+
+async function init() {
+  say("Loading model…");
+  const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  landmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO", numPoses: 1,
+  });
+  say("Starting camera…");
+  video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, frameRate: 60 } });
+  await video.play();
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  requestAnimationFrame(loop);
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (state === "playing") {            // timer runs even when no body is detected
+    const t = performance.now() - roundStart;
+    $("time").textContent = Math.max(0, (ROUND_MS - t) / 1000).toFixed(1) + "s";
+    if (t >= ROUND_MS) return finish(counters[0].count + counters[1].count);
+  }
+  if (video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const res = landmarker.detectForVideo(video, now);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const lm = res.landmarks[0];
+  if (!lm) { if (state !== "idle") say("No body found, step back"); return; }
+  draw.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: "#7cf5a8", lineWidth: 3 });
+  draw.drawLandmarks(lm, { color: "#fff", radius: 3 });
+
+  const H = canvas.height, W = canvas.width;
+  const vis = i => lm[i].visibility > MIN_VIS;
+  const d = (a, b) => Math.hypot((a.x - b.x) * W, (a.y - b.y) * H);
+  // distance-independent scale: shoulder-hip distance, or 1.5x shoulder width when hips are out of frame (seated at a desk)
+  let scale;
+  if ([11, 12, 23, 24].every(vis)) scale = (d(lm[11], lm[23]) + d(lm[12], lm[24])) / 2;
+  else if (vis(11) && vis(12)) scale = 1.5 * d(lm[11], lm[12]);
+  else { if (state !== "idle") say("Step back: show your shoulders"); return; }
+
+  if (state === "playing") {
+    [15, 16].forEach((i, k) => { if (lm[i].visibility > MIN_VIS) feed(counters[k], lm[i].y * H, THRESH * scale); });
+    $("big").textContent = counters[0].count + counters[1].count;
+    say("GO!");
+  }
+}
+
+async function run() {
+  $("start").disabled = true; $("result").style.display = "none";
+  try { if (!landmarker) await init(); }
+  catch (e) { say("Error: " + e.message); $("start").disabled = false; console.error(e); return; }
+  state = "countdown";
+  for (let n = 3; n > 0; n--) { $("big").textContent = n; say("Get ready, arms up!"); await new Promise(r => setTimeout(r, 1000)); }
+  counters = [makeCounter(), makeCounter()];
+  roundStart = performance.now(); state = "playing"; $("big").textContent = 0; say("GO!");
+}
+
+function finish(total) {
+  state = "idle"; $("start").disabled = false; $("start").textContent = "Play again";
+  const prev = getBest();
+  if (total > prev) setBest(total);
+  const entry = { name: playerName, score: total, t: Date.now() };
+  setBoard([...getBoard(), entry].sort((a, b) => b.score - a.score || a.t - b.t).slice(0, 50));
+  renderBoard(entry.t);
+  $("score").textContent = total;
+  $("rps").textContent = (total / (ROUND_MS / 1000)).toFixed(1);
+  $("pb").textContent = total > prev ? "New personal best!" : "Best: " + prev;
+  $("result").style.display = "block"; say("Done"); showBest();
+}
+// ---- name prompt + leaderboard ----
+// ponytail: leaderboard lives in localStorage, so it is per browser. Swap getBoard/setBoard for fetch calls to a backend to share it.
+let playerName = "";
+const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
+const getBoard = () => { try { return JSON.parse(store("67board")) || []; } catch { return []; } };
+const setBoard = b => store("67board", JSON.stringify(b));
+function renderBoard(highlightT) {
+  const rows = $("rows"); rows.replaceChildren();
+  const b = getBoard().slice(0, 10);
+  if (!b.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No scores yet. Be the first."; rows.append(li); return; }
+  b.forEach(e => {
+    const li = document.createElement("li"); if (e.t === highlightT) li.className = "me";
+    const n = document.createElement("span"); n.className = "n"; n.textContent = e.name;   // textContent: names are untrusted input
+    const s = document.createElement("span"); s.className = "s"; s.textContent = e.score;
+    li.append(n, s); rows.append(li);
+  });
+}
+renderBoard();
+$("start").onclick = () => {
+  if (parent !== window) parent.postMessage({ type: "67:start" }, location.origin);  // landing page zooms into play mode
+  $("name").value = store("67name") || ""; $("modal").hidden = false; $("name").focus(); };
+$("nameForm").onsubmit = e => {
+  e.preventDefault();
+  playerName = $("name").value.trim().slice(0, 16);
+  if (!playerName) return;
+  store("67name", playerName); $("modal").hidden = true; run();
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("modal").hidden = true; });
+// landing page "Play now" buttons ask the embedded game to open the name prompt (same as pressing Start)
+addEventListener("message", e => { if (e.origin === location.origin && e.data && e.data.type === "67:open") $("start").click(); });
+
+// self-check: synthetic 5 Hz wrist sine for 2 s at 30 fps should give ~2 reversals per cycle
+(() => {
+  const s = makeCounter();
+  for (let f = 0; f < 60; f++) feed(s, 200 + 100 * Math.sin(2 * Math.PI * 5 * f / 30), 20);
+  console.assert(s.count >= 15 && s.count <= 21, "counter self-check failed", s.count);
+})();
+</script>
+</body>
+</html>
